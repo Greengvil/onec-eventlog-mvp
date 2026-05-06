@@ -102,6 +102,16 @@ go run ./cmd/eventlog-service -config ./config.file.example.yaml
 docker exec -i onec-eventlog-clickhouse clickhouse-client --query "SELECT count() AS rows, uniqExact(event_fingerprint) AS unique_fingerprints FROM onec_eventlog.eventlog_events WHERE source_id = 'file-smoke-local'"
 ```
 
+Текущий MVP защищает локальный повторный запуск через SQLite-буфер: `message_id` стабилен для пары `source_id + payload_hash`, поэтому повторное чтение того же JSONL с тем же SQLite-файлом не создаёт новые pending-события. В ClickHouse `event_fingerprint` сохраняется для диагностики дублей; сложная дедупликация ClickHouse пока не выполняется.
+
+Для реальной локальной выгрузки можно проверить так:
+
+```powershell
+go run ./cmd/eventlog-service -config ./config.real.local.yaml
+go run ./cmd/eventlog-service -config ./config.real.local.yaml
+docker exec -i onec-eventlog-clickhouse clickhouse-client --query "SELECT count(), uniqExact(event_fingerprint) FROM onec_eventlog.eventlog_events WHERE source_id = 'real-jr-local'"
+```
+
 ## 5. Повторная проверка
 
 Если smoke запускается повторно на той же базе, количество строк может быть больше `4`. Для чистого повторного прогона можно удалить локальный SQLite-буфер и строки smoke-источника:

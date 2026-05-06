@@ -201,6 +201,7 @@ func fingerprint(record EventRecord) string {
 		record.SourceID,
 		record.EventTime.Format(time.RFC3339Nano),
 		record.EventName,
+		record.Application,
 		record.UserID,
 		record.UserName,
 		strings.Join(record.MetadataNames, ","),

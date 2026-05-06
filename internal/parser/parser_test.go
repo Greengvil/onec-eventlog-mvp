@@ -196,3 +196,28 @@ func TestParseEventFingerprintDiffersForDifferentSource(t *testing.T) {
 		t.Fatalf("different sources produced same fingerprint: %q", first.EventFingerprint)
 	}
 }
+
+func TestParseEventFingerprintDiffersForDifferentPayloadHash(t *testing.T) {
+	raw := `{"Date":"2026-05-01T10:01:02Z","Application":"1CV8","EventName":"Data.Update","UserID":"ivanov","UserName":"Ivanov I.I.","MetadataName":["Catalog.Products"],"TransactionID":"tx-001","Connection":42,"Session":77}`
+
+	first, err := parser.Parse(buffer.EventMessage{
+		SourceID:    "source-1",
+		PayloadHash: "sha256:first",
+		PayloadJSON: raw,
+	})
+	if err != nil {
+		t.Fatalf("parse first event: %v", err)
+	}
+	second, err := parser.Parse(buffer.EventMessage{
+		SourceID:    "source-1",
+		PayloadHash: "sha256:second",
+		PayloadJSON: raw,
+	})
+	if err != nil {
+		t.Fatalf("parse second event: %v", err)
+	}
+
+	if first.EventFingerprint == second.EventFingerprint {
+		t.Fatalf("different payload hashes produced same fingerprint: %q", first.EventFingerprint)
+	}
+}
