@@ -1,0 +1,24 @@
+service:
+  name: onec-eventlog-service-file-smoke
+  http_addr: ":8080"
+
+source:
+  source_id: file-smoke-local
+  source_name: "ЖР file smoke"
+  infobase_id: file-smoke
+  infobase_name: "File smoke"
+  source_node_id: local
+  mode: "file"
+  file_path: "./testdata/eventlog_sample.jsonl"
+
+buffer:
+  path: "./data/file-mode-smoke.db"
+  batch_size: 500
+  retention_after_ack_hours: 24
+
+clickhouse:
+  address: "localhost:9000"
+  database: "onec_eventlog"
+  username: "default"
+  password: ""
+  table: "eventlog_events"

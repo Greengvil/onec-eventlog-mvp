@@ -1,0 +1,22 @@
+# Local configs
+config.*.local.yaml
+config.real.local.yaml
+
+# Real event logs / exports
+testdata/real_*.jsonl
+*.lgp
+*.lgf
+
+# Local runtime data
+*.db
+*.db-shm
+*.db-wal
+data/
+tmp/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+config.*.local.yaml

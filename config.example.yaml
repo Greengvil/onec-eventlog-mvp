@@ -1,0 +1,28 @@
+service:
+  name: onec-eventlog-service
+  http_addr: ":8080"
+
+source:
+  source_id: prod-main-local
+  source_name: "ЖР УХ PROD"
+  infobase_id: prod-main
+  infobase_name: "УХ PROD"
+  source_node_id: app01
+  mode: "ibcmd"  # "ibcmd" or "file"
+  ibcmd_path: "ibcmd"
+  log_path: "/var/lib/1c/srvinfo/reg_1541/<infobase-id>/1Cv8Log"
+  # file_path: "./testdata/events.jsonl"  # Required when mode is "file"
+  from: "2026-05-01T00:00:00"
+  follow_interval_ms: 1000
+
+buffer:
+  path: "./data/agent.db"
+  batch_size: 500
+  retention_after_ack_hours: 24
+
+clickhouse:
+  address: "localhost:9000"
+  database: "onec_eventlog"
+  username: "default"
+  password: ""
+  table: "eventlog_events"
