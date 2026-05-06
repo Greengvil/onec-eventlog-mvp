@@ -14,6 +14,9 @@ import (
 const (
 	defaultEventsLimit = 100
 	maxEventsLimit     = 1000
+
+	defaultNeighborsLimit = 10
+	maxNeighborsLimit     = 50
 )
 
 type EventSearchParams struct {
@@ -66,6 +69,23 @@ type EventDetailResult struct {
 	IngestedAt              time.Time `json:"ingested_at"`
 }
 
+type EventNeighborItem struct {
+	EventTime        time.Time `json:"event_time"`
+	Level            string    `json:"level"`
+	Application      string    `json:"application"`
+	EventName        string    `json:"event_name"`
+	UserName         string    `json:"user_name"`
+	MetadataNames    []string  `json:"metadata_names"`
+	DataPresentation string    `json:"data_presentation"`
+	EventFingerprint string    `json:"event_fingerprint"`
+}
+
+type EventNeighborsResult struct {
+	Current EventNeighborItem   `json:"current"`
+	Before  []EventNeighborItem `json:"before"`
+	After   []EventNeighborItem `json:"after"`
+}
+
 func (w *Writer) EventsHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -87,6 +107,16 @@ func (w *Writer) EventsHandler() http.HandlerFunc {
 
 		rw.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(rw).Encode(events)
+	}
+}
+
+func (w *Writer) EventRouteHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/neighbors") {
+			w.EventNeighborsHandler()(rw, r)
+			return
+		}
+		w.EventDetailHandler()(rw, r)
 	}
 }
 
@@ -118,6 +148,39 @@ func (w *Writer) EventDetailHandler() http.HandlerFunc {
 	}
 }
 
+func (w *Writer) EventNeighborsHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			rw.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		fingerprint, err := EventFingerprintFromNeighborsPath(r.URL.Path)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+		limit, err := ParseNeighborLimit(r.URL.Query())
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		neighbors, found, err := w.GetEventNeighbors(r.Context(), fingerprint, limit)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(rw, r)
+			return
+		}
+
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(neighbors)
+	}
+}
+
 func EventFingerprintFromPath(path string) (string, error) {
 	fingerprint := strings.TrimPrefix(path, "/api/events/")
 	fingerprint = strings.TrimSpace(fingerprint)
@@ -128,6 +191,14 @@ func EventFingerprintFromPath(path string) (string, error) {
 		return "", fmt.Errorf("event_fingerprint must not contain slash")
 	}
 	return fingerprint, nil
+}
+
+func EventFingerprintFromNeighborsPath(path string) (string, error) {
+	if !strings.HasSuffix(path, "/neighbors") {
+		return "", fmt.Errorf("neighbors path is required")
+	}
+	path = strings.TrimSuffix(path, "/neighbors")
+	return EventFingerprintFromPath(path)
 }
 
 func ParseEventSearchParams(values url.Values) (EventSearchParams, error) {
@@ -166,6 +237,24 @@ func ParseEventSearchParams(values url.Values) (EventSearchParams, error) {
 	}
 
 	return params, nil
+}
+
+func ParseNeighborLimit(values url.Values) (int, error) {
+	raw := values.Get("limit")
+	if raw == "" {
+		return defaultNeighborsLimit, nil
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid limit: %w", err)
+	}
+	if limit <= 0 {
+		return 0, fmt.Errorf("limit must be positive")
+	}
+	if limit > maxNeighborsLimit {
+		return maxNeighborsLimit, nil
+	}
+	return limit, nil
 }
 
 func parseSearchTime(value string) (time.Time, error) {
@@ -313,4 +402,122 @@ func (w *Writer) GetEventByFingerprint(ctx context.Context, fingerprint string) 
 		return EventDetailResult{}, false, fmt.Errorf("scan event detail: %w", err)
 	}
 	return event, true, nil
+}
+
+func (w *Writer) GetEventNeighbors(ctx context.Context, fingerprint string, limit int) (EventNeighborsResult, bool, error) {
+	current, sourceID, found, err := w.getNeighborCurrent(ctx, fingerprint)
+	if err != nil || !found {
+		return EventNeighborsResult{}, found, err
+	}
+
+	before, err := w.getNeighborSide(ctx, sourceID, current.EventTime, current.EventFingerprint, true, limit)
+	if err != nil {
+		return EventNeighborsResult{}, false, err
+	}
+	after, err := w.getNeighborSide(ctx, sourceID, current.EventTime, current.EventFingerprint, false, limit)
+	if err != nil {
+		return EventNeighborsResult{}, false, err
+	}
+
+	return EventNeighborsResult{
+		Current: current,
+		Before:  before,
+		After:   after,
+	}, true, nil
+}
+
+func (w *Writer) getNeighborCurrent(ctx context.Context, fingerprint string) (EventNeighborItem, string, bool, error) {
+	query := fmt.Sprintf(`
+		SELECT
+			source_id, event_time, level, application, event_name, user_name,
+			metadata_names, data_presentation, event_fingerprint
+		FROM %s
+		WHERE event_fingerprint = ?
+		ORDER BY ingested_at DESC
+		LIMIT 1
+	`, w.table)
+
+	rows, err := w.conn.Query(ctx, query, fingerprint)
+	if err != nil {
+		return EventNeighborItem{}, "", false, fmt.Errorf("query current event: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return EventNeighborItem{}, "", false, fmt.Errorf("iterate current event: %w", err)
+		}
+		return EventNeighborItem{}, "", false, nil
+	}
+
+	var item EventNeighborItem
+	var sourceID string
+	if err := rows.Scan(
+		&sourceID,
+		&item.EventTime,
+		&item.Level,
+		&item.Application,
+		&item.EventName,
+		&item.UserName,
+		&item.MetadataNames,
+		&item.DataPresentation,
+		&item.EventFingerprint,
+	); err != nil {
+		return EventNeighborItem{}, "", false, fmt.Errorf("scan current event: %w", err)
+	}
+	return item, sourceID, true, nil
+}
+
+func (w *Writer) getNeighborSide(ctx context.Context, sourceID string, eventTime time.Time, fingerprint string, before bool, limit int) ([]EventNeighborItem, error) {
+	operator := ">"
+	order := "ASC"
+	if before {
+		operator = "<"
+		order = "DESC"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			event_time, level, application, event_name, user_name,
+			metadata_names, data_presentation, event_fingerprint
+		FROM (
+			SELECT
+				event_time, level, application, event_name, user_name,
+				metadata_names, data_presentation, event_fingerprint, ingested_at,
+				row_number() OVER (PARTITION BY event_fingerprint ORDER BY ingested_at DESC) AS rn
+			FROM %s
+			WHERE source_id = ? AND event_time %s ? AND event_fingerprint != ?
+		)
+		WHERE rn = 1
+		ORDER BY event_time %s
+		LIMIT ?
+	`, w.table, operator, order)
+
+	rows, err := w.conn.Query(ctx, query, sourceID, eventTime, fingerprint, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query neighbor events: %w", err)
+	}
+	defer rows.Close()
+
+	var result []EventNeighborItem
+	for rows.Next() {
+		var item EventNeighborItem
+		if err := rows.Scan(
+			&item.EventTime,
+			&item.Level,
+			&item.Application,
+			&item.EventName,
+			&item.UserName,
+			&item.MetadataNames,
+			&item.DataPresentation,
+			&item.EventFingerprint,
+		); err != nil {
+			return nil, fmt.Errorf("scan neighbor event: %w", err)
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate neighbor events: %w", err)
+	}
+	return result, nil
 }

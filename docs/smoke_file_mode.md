@@ -100,6 +100,14 @@ $fingerprint = $event[0].event_fingerprint
 Invoke-RestMethod "http://127.0.0.1:8080/api/events/$fingerprint"
 ```
 
+Посмотреть соседние события из того же источника:
+
+```powershell
+$event = Invoke-RestMethod "http://127.0.0.1:8080/api/events?source_id=real-jr-local&limit=1"
+$fingerprint = $event[0].event_fingerprint
+Invoke-RestMethod "http://127.0.0.1:8080/api/events/$fingerprint/neighbors?limit=3"
+```
+
 Проверить отпечатки событий:
 
 ```powershell

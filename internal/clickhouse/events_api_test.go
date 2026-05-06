@@ -73,3 +73,48 @@ func TestEventFingerprintFromPathRejectsInvalidPath(t *testing.T) {
 		t.Fatal("expected slash error")
 	}
 }
+
+func TestEventFingerprintFromNeighborsPath(t *testing.T) {
+	fingerprint, err := EventFingerprintFromNeighborsPath("/api/events/abcdef123/neighbors")
+	if err != nil {
+		t.Fatalf("parse fingerprint: %v", err)
+	}
+	if fingerprint != "abcdef123" {
+		t.Fatalf("fingerprint = %q", fingerprint)
+	}
+}
+
+func TestParseNeighborLimit(t *testing.T) {
+	limit, err := ParseNeighborLimit(url.Values{})
+	if err != nil {
+		t.Fatalf("parse default limit: %v", err)
+	}
+	if limit != defaultNeighborsLimit {
+		t.Fatalf("limit = %d, want %d", limit, defaultNeighborsLimit)
+	}
+
+	limit, err = ParseNeighborLimit(url.Values{"limit": {"500"}})
+	if err != nil {
+		t.Fatalf("parse capped limit: %v", err)
+	}
+	if limit != maxNeighborsLimit {
+		t.Fatalf("limit = %d, want %d", limit, maxNeighborsLimit)
+	}
+
+	limit, err = ParseNeighborLimit(url.Values{"limit": {"3"}})
+	if err != nil {
+		t.Fatalf("parse explicit limit: %v", err)
+	}
+	if limit != 3 {
+		t.Fatalf("limit = %d, want 3", limit)
+	}
+}
+
+func TestParseNeighborLimitRejectsInvalidLimit(t *testing.T) {
+	if _, err := ParseNeighborLimit(url.Values{"limit": {"bad"}}); err == nil {
+		t.Fatal("expected invalid limit error")
+	}
+	if _, err := ParseNeighborLimit(url.Values{"limit": {"0"}}); err == nil {
+		t.Fatal("expected non-positive limit error")
+	}
+}
