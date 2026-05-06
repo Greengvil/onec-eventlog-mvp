@@ -43,6 +43,29 @@ type EventSearchResult struct {
 	EventFingerprint  string    `json:"event_fingerprint"`
 }
 
+type EventDetailResult struct {
+	EventTime               time.Time `json:"event_time"`
+	Level                   string    `json:"level"`
+	Application             string    `json:"application"`
+	ApplicationPresentation string    `json:"application_presentation"`
+	EventName               string    `json:"event_name"`
+	EventPresentation       string    `json:"event_presentation"`
+	UserID                  string    `json:"user_id"`
+	UserName                string    `json:"user_name"`
+	MetadataNames           []string  `json:"metadata_names"`
+	MetadataPresentations   []string  `json:"metadata_presentations"`
+	Comment                 string    `json:"comment"`
+	DataPresentation        string    `json:"data_presentation"`
+	TransactionStatus       string    `json:"transaction_status"`
+	TransactionID           string    `json:"transaction_id"`
+	Connection              int64     `json:"connection"`
+	Session                 int64     `json:"session"`
+	ServerName              string    `json:"server_name"`
+	EventFingerprint        string    `json:"event_fingerprint"`
+	RawPayload              string    `json:"raw_payload"`
+	IngestedAt              time.Time `json:"ingested_at"`
+}
+
 func (w *Writer) EventsHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -65,6 +88,46 @@ func (w *Writer) EventsHandler() http.HandlerFunc {
 		rw.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(rw).Encode(events)
 	}
+}
+
+func (w *Writer) EventDetailHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			rw.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		fingerprint, err := EventFingerprintFromPath(r.URL.Path)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		event, found, err := w.GetEventByFingerprint(r.Context(), fingerprint)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(rw, r)
+			return
+		}
+
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(event)
+	}
+}
+
+func EventFingerprintFromPath(path string) (string, error) {
+	fingerprint := strings.TrimPrefix(path, "/api/events/")
+	fingerprint = strings.TrimSpace(fingerprint)
+	if fingerprint == "" || fingerprint == path {
+		return "", fmt.Errorf("event_fingerprint is required")
+	}
+	if strings.Contains(fingerprint, "/") {
+		return "", fmt.Errorf("event_fingerprint must not contain slash")
+	}
+	return fingerprint, nil
 }
 
 func ParseEventSearchParams(values url.Values) (EventSearchParams, error) {
@@ -196,4 +259,58 @@ func (w *Writer) SearchEvents(ctx context.Context, params EventSearchParams) ([]
 		return nil, fmt.Errorf("iterate events: %w", err)
 	}
 	return result, nil
+}
+
+func (w *Writer) GetEventByFingerprint(ctx context.Context, fingerprint string) (EventDetailResult, bool, error) {
+	query := fmt.Sprintf(`
+		SELECT
+			event_time, level, application, application_presentation, event_name, event_presentation,
+			user_id, user_name, metadata_names, metadata_presentations, comment, data_presentation,
+			transaction_status, transaction_id, connection, session, server_name, event_fingerprint,
+			raw_payload, ingested_at
+		FROM %s
+		WHERE event_fingerprint = ?
+		ORDER BY ingested_at DESC
+		LIMIT 1
+	`, w.table)
+
+	rows, err := w.conn.Query(ctx, query, fingerprint)
+	if err != nil {
+		return EventDetailResult{}, false, fmt.Errorf("query event detail: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return EventDetailResult{}, false, fmt.Errorf("iterate event detail: %w", err)
+		}
+		return EventDetailResult{}, false, nil
+	}
+
+	var event EventDetailResult
+	if err := rows.Scan(
+		&event.EventTime,
+		&event.Level,
+		&event.Application,
+		&event.ApplicationPresentation,
+		&event.EventName,
+		&event.EventPresentation,
+		&event.UserID,
+		&event.UserName,
+		&event.MetadataNames,
+		&event.MetadataPresentations,
+		&event.Comment,
+		&event.DataPresentation,
+		&event.TransactionStatus,
+		&event.TransactionID,
+		&event.Connection,
+		&event.Session,
+		&event.ServerName,
+		&event.EventFingerprint,
+		&event.RawPayload,
+		&event.IngestedAt,
+	); err != nil {
+		return EventDetailResult{}, false, fmt.Errorf("scan event detail: %w", err)
+	}
+	return event, true, nil
 }

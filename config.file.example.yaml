@@ -1,6 +1,6 @@
 service:
   name: onec-eventlog-service-file-smoke
-  http_addr: ":8080"
+  http_addr: "127.0.0.1:8080"
 
 source:
   source_id: file-smoke-local

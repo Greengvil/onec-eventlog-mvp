@@ -45,6 +45,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", state.Handler())
 	mux.HandleFunc("/api/events", writer.EventsHandler())
+	mux.HandleFunc("/api/events/", writer.EventDetailHandler())
 
 	httpServer := &http.Server{
 		Addr:    cfg.Service.HTTPAddr,

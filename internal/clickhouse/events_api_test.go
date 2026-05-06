@@ -54,3 +54,22 @@ func TestParseEventSearchParamsFilters(t *testing.T) {
 		t.Fatalf("expected parsed from/to: %#v", params)
 	}
 }
+
+func TestEventFingerprintFromPath(t *testing.T) {
+	fingerprint, err := EventFingerprintFromPath("/api/events/abcdef123")
+	if err != nil {
+		t.Fatalf("parse fingerprint: %v", err)
+	}
+	if fingerprint != "abcdef123" {
+		t.Fatalf("fingerprint = %q", fingerprint)
+	}
+}
+
+func TestEventFingerprintFromPathRejectsInvalidPath(t *testing.T) {
+	if _, err := EventFingerprintFromPath("/api/events/"); err == nil {
+		t.Fatal("expected empty fingerprint error")
+	}
+	if _, err := EventFingerprintFromPath("/api/events/a/b"); err == nil {
+		t.Fatal("expected slash error")
+	}
+}

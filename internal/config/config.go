@@ -68,7 +68,7 @@ func Load(path string) (*Config, error) {
 
 func (c *Config) Validate() error {
 	if c.Service.HTTPAddr == "" {
-		c.Service.HTTPAddr = ":8080"
+		c.Service.HTTPAddr = "127.0.0.1:8080"
 	}
 	if c.Source.SourceID == "" {
 		return errors.New("source.source_id is required")

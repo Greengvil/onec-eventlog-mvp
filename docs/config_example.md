@@ -7,7 +7,7 @@
 ```yaml
 service:
   name: onec-eventlog-service
-  http_addr: ":8080"
+  http_addr: "127.0.0.1:8080"
 
 source:
   source_id: prod-main-local
@@ -41,7 +41,7 @@ clickhouse:
 ```yaml
 service:
   name: onec-eventlog-service
-  http_addr: ":8080"
+  http_addr: "127.0.0.1:8080"
 
 source:
   source_id: dev-local
@@ -73,4 +73,3 @@ clickhouse:
 {"Date":"2026-05-01T10:00:00","User":"admin","Computer":"PC01","Application":"1CV8","Event":"","Severity":"I","TransactionStatus":"","TransactionStartTime":"","TransactionID":"","SessionNumber":"","ClientID":"","ServerID":"","MainPort":"","SecondPort":"","Message":""}
 {"Date":"2026-05-01T10:01:00","User":"user1","Computer":"PC02","Application":"1CV8","Event":"","Severity":"W","TransactionStatus":"","TransactionStartTime":"","TransactionID":"","SessionNumber":"","ClientID":"","ServerID":"","MainPort":"","SecondPort":"","Message":""}
 ```
-

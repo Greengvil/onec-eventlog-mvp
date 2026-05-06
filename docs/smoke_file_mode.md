@@ -6,6 +6,8 @@
 
 Конфиг для запуска: `config.file.example.yaml`.
 
+По умолчанию HTTP-сервер слушает только локальный интерфейс `127.0.0.1:8080`.
+
 ## 1. Поднять ClickHouse
 
 Из корня проекта:
@@ -41,8 +43,8 @@ go run ./cmd/eventlog-service -config ./config.file.example.yaml
 Пока сервис ждёт опустошения буфера, во втором терминале:
 
 ```powershell
-Invoke-WebRequest http://localhost:8080/health
-Invoke-RestMethod http://localhost:8080/status
+Invoke-WebRequest http://127.0.0.1:8080/health
+Invoke-RestMethod http://127.0.0.1:8080/status
 ```
 
 В `/status` ожидаемые признаки:
@@ -87,7 +89,15 @@ docker exec -i onec-eventlog-clickhouse clickhouse-client --query "SELECT event_
 Проверить HTTP API поиска событий:
 
 ```powershell
-Invoke-RestMethod "http://localhost:8080/api/events?source_id=real-jr-local&limit=10"
+Invoke-RestMethod "http://127.0.0.1:8080/api/events?source_id=real-jr-local&limit=10"
+```
+
+Взять `event_fingerprint` из результата поиска и открыть карточку события:
+
+```powershell
+$event = Invoke-RestMethod "http://127.0.0.1:8080/api/events?source_id=real-jr-local&limit=1"
+$fingerprint = $event[0].event_fingerprint
+Invoke-RestMethod "http://127.0.0.1:8080/api/events/$fingerprint"
 ```
 
 Проверить отпечатки событий:
