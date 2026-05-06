@@ -1,8 +1,8 @@
-# Event Explorer UI
+# AltLog Explorer / Event Explorer
 
-Заглушка для будущего web-интерфейса.
+Заглушка для будущего web-интерфейса AltLog Explorer.
 
-MVP-экран должен включать:
+Экран Event Explorer на текущем MVP-этапе должен включать:
 
 - фильтр по периоду;
 - фильтр по ИБ;
