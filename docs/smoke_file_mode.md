@@ -84,6 +84,12 @@ docker exec -i onec-eventlog-clickhouse clickhouse-client --query "SELECT event_
 docker exec -i onec-eventlog-clickhouse clickhouse-client --query "SELECT event_time, application, event_name, user_name, metadata_names, data_presentation FROM onec_eventlog.eventlog_events WHERE source_id = 'real-jr-local' ORDER BY event_time LIMIT 10 FORMAT PrettyCompact"
 ```
 
+Проверить HTTP API поиска событий:
+
+```powershell
+Invoke-RestMethod "http://localhost:8080/api/events?source_id=real-jr-local&limit=10"
+```
+
 Проверить отпечатки событий:
 
 ```powershell

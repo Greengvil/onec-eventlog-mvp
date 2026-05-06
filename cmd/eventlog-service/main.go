@@ -42,9 +42,13 @@ func main() {
 		log.Fatalf("open clickhouse writer: %v", err)
 	}
 
+	mux := http.NewServeMux()
+	mux.Handle("/", state.Handler())
+	mux.HandleFunc("/api/events", writer.EventsHandler())
+
 	httpServer := &http.Server{
 		Addr:    cfg.Service.HTTPAddr,
-		Handler: state.Handler(),
+		Handler: mux,
 	}
 	go func() {
 		log.Printf("status http server listening on %s", cfg.Service.HTTPAddr)
